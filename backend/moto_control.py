@@ -449,52 +449,52 @@ def main():
                     if not line: continue
                     try:
                         cmd = json.loads(line)
-                    op = cmd.get("op")
-                    if op == "anc":
-                        sub_mode = 1 if cmd.get("mode") == 1 else 0
-                        controller.toggle_anc(cmd.get("mode"), sub_mode)
-                    elif op == "game":
-                        controller.toggle_game_mode(cmd.get("enabled"))
-                    elif op == "inear":
-                        controller.toggle_inear(cmd.get("enabled"))
-                    elif op == "volboost":
-                        controller.toggle_volboost(cmd.get("enabled"))
-                    elif op == "hires":
-                        controller.toggle_hires(cmd.get("enabled"))
-                    elif op == "fit":
-                        controller.toggle_fit(cmd.get("enabled"))
-                    elif op == "fmd":
-                        controller.toggle_fmd(int(cmd.get("left", 0)), int(cmd.get("right", 0)))
-                    elif op == "eq":
-                        if "preset" in cmd and cmd["preset"]:
-                            controller.apply_preset(cmd.get("preset"))
-                        elif "bands" in cmd:
-                            controller.set_custom_eq(cmd.get("bands"))
-                    elif op == "preset":
-                        controller.apply_preset(cmd.get("preset") or cmd.get("name"))
-                    elif op == "gesture":
-                        controller.set_gesture(cmd.get("earbud"), cmd.get("gesture"), cmd.get("func"))
-                    elif op == "sync":
-                        res_anc = controller._send_and_receive(0x0200, b"")
-                        res_hires = controller._send_and_receive(0x030C, b"")
-                        res_game = controller._send_and_receive(0x030E, b"")
-                        res_inear = controller._send_and_receive(0x0402, b"")
-                        res_gestures = controller._send_and_receive(0x0100, b"")
-                        sync_data = {}
-                        if res_anc: sync_data["anc_raw"] = res_anc.hex()
-                        if res_hires: sync_data["hires_raw"] = res_hires.hex()
-                        if res_game: sync_data["game_raw"] = res_game.hex()
-                        if res_inear: sync_data["inear_raw"] = res_inear.hex()
-                        if res_gestures: sync_data["gestures_raw"] = res_gestures.hex()
-                        print(json.dumps({"type": "sync", "data": sync_data}), flush=True)
-                    elif op == "battery":
-                        res = controller.read_battery()
-                        print(json.dumps({"type": "battery", "data": res}), flush=True)
-                    elif op == "info":
-                        res = controller.get_hardware_info()
-                        print(json.dumps({"type": "info", "data": res}), flush=True)
-                except Exception as e:
-                    controller.log(f"[-] Daemon JSON command error: {e}")
+                        op = cmd.get("op")
+                        if op == "anc":
+                            sub_mode = 1 if cmd.get("mode") == 1 else 0
+                            controller.toggle_anc(cmd.get("mode"), sub_mode)
+                        elif op == "game":
+                            controller.toggle_game_mode(cmd.get("enabled"))
+                        elif op == "inear":
+                            controller.toggle_inear(cmd.get("enabled"))
+                        elif op == "volboost":
+                            controller.toggle_volboost(cmd.get("enabled"))
+                        elif op == "hires":
+                            controller.toggle_hires(cmd.get("enabled"))
+                        elif op == "fit":
+                            controller.toggle_fit(cmd.get("enabled"))
+                        elif op == "fmd":
+                            controller.toggle_fmd(int(cmd.get("left", 0)), int(cmd.get("right", 0)))
+                        elif op == "eq":
+                            if "preset" in cmd and cmd["preset"]:
+                                controller.apply_preset(cmd.get("preset"))
+                            elif "bands" in cmd:
+                                controller.set_custom_eq(cmd.get("bands"))
+                        elif op == "preset":
+                            controller.apply_preset(cmd.get("preset") or cmd.get("name"))
+                        elif op == "gesture":
+                            controller.set_gesture(cmd.get("earbud"), cmd.get("gesture"), cmd.get("func"))
+                        elif op == "sync":
+                            res_anc = controller._send_and_receive(0x0200, b"")
+                            res_hires = controller._send_and_receive(0x030C, b"")
+                            res_game = controller._send_and_receive(0x030E, b"")
+                            res_inear = controller._send_and_receive(0x0402, b"")
+                            res_gestures = controller._send_and_receive(0x0100, b"")
+                            sync_data = {}
+                            if res_anc: sync_data["anc_raw"] = res_anc.hex()
+                            if res_hires: sync_data["hires_raw"] = res_hires.hex()
+                            if res_game: sync_data["game_raw"] = res_game.hex()
+                            if res_inear: sync_data["inear_raw"] = res_inear.hex()
+                            if res_gestures: sync_data["gestures_raw"] = res_gestures.hex()
+                            print(json.dumps({"type": "sync", "data": sync_data}), flush=True)
+                        elif op == "battery":
+                            res = controller.read_battery()
+                            print(json.dumps({"type": "battery", "data": res}), flush=True)
+                        elif op == "info":
+                            res = controller.get_hardware_info()
+                            print(json.dumps({"type": "info", "data": res}), flush=True)
+                    except Exception as e:
+                        controller.log(f"[-] Daemon JSON command error: {e}")
             except Exception:
                 pass
             running[0] = False
