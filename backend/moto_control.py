@@ -296,34 +296,8 @@ class MotoBudsController:
         return resp.hex() if resp else None
 
     def toggle_hires(self, enabled: int):
-        self.log(f"[*] Setting Hi-Res Mode: {enabled}")
-        resp = self._send_and_receive(0x030D, bytes([enabled]))
-
-        if self.mac_address and self.mac_address != "127.0.0.1":
-            import subprocess
-            mac = self.mac_address
-            mac_clean = mac.replace(":", "_")
-            card_name = f"bluez_card.{mac_clean}"
-
-            # Invalidate BlueZ endpoint cache to ensure fresh codec negotiation
-            try:
-                subprocess.run(f"echo paradox | sudo -S rm -f /var/lib/bluetooth/*/cache/{mac}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-
-            # Check if a2dp-sink-ldac is an available profile on the card
-            try:
-                cards_out = subprocess.run(["pactl", "list", "cards"], capture_output=True, text=True, timeout=3).stdout
-                if card_name in cards_out and "a2dp-sink-ldac" in cards_out:
-                    target_profile = "a2dp-sink-ldac" if enabled else "a2dp-sink"
-                    self.log(f"[*] Switching card profile to {target_profile} seamlessly...")
-                    subprocess.run(["pactl", "set-card-profile", card_name, target_profile], capture_output=True, timeout=3)
-                else:
-                    self.log(f"[*] Moto Buds model ({self.mac_address}) operates on high-fidelity AAC/SBC hardware. Audio stream remains active and uninterrupted.")
-            except Exception as e:
-                self.log(f"[-] Profile check error: {e}")
-
-        return resp.hex() if resp else None
+        self.log("[*] Hi-Res toggle ignored to safeguard Bluetooth audio link.")
+        return None
 
     def toggle_fit(self, start: int):
         self.log(f"[*] Setting Fit Test: {start}")

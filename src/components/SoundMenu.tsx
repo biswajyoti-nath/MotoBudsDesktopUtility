@@ -1,40 +1,14 @@
-import { useState } from 'react';
 import { useDeviceStore } from '../store/useDeviceStore';
-import { Gamepad2, Volume2, Activity, Radio, AlertTriangle, ShieldCheck, Cpu } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Gamepad2, Volume2, Radio, ShieldCheck, Cpu } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export const SoundMenu = () => {
-  const { name, gameMode, setGameMode, volBoost, setVolBoost, hiRes, setHiRes, setCurrentView } = useDeviceStore();
-  
-  const [conflictDialog, setConflictDialog] = useState<'game' | 'hires' | null>(null);
+  const { name, gameMode, setGameMode, volBoost, setVolBoost, setCurrentView } = useDeviceStore();
 
   const isPlusModel = name === 'Moto Buds+';
 
-  const handleToggleHiRes = () => {
-    if (!hiRes && gameMode) {
-      setConflictDialog('hires');
-    } else {
-      setHiRes(!hiRes);
-    }
-  };
-
   const handleToggleGameMode = () => {
-    if (!gameMode && hiRes) {
-      setConflictDialog('game');
-    } else {
-      setGameMode(!gameMode);
-    }
-  };
-
-  const confirmConflict = () => {
-    if (conflictDialog === 'hires') {
-      setGameMode(false);
-      setTimeout(() => setHiRes(true), 300);
-    } else if (conflictDialog === 'game') {
-      setHiRes(false);
-      setTimeout(() => setGameMode(true), 300);
-    }
-    setConflictDialog(null);
+    setGameMode(!gameMode);
   };
 
   return (
@@ -118,38 +92,6 @@ export const SoundMenu = () => {
             </div>
           )}
 
-          {/* Hi-Res Mode */}
-          <div className="setting-row">
-            <div className="setting-info">
-              <div className={`setting-icon ${hiRes ? 'accent' : ''}`}>
-                <Activity size={18} />
-              </div>
-              <div className="setting-text">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="setting-title">Hi-Res Audio</span>
-                  <span style={{
-                    fontSize: '0.72rem',
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    backgroundColor: hiRes ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                    color: hiRes ? 'var(--accent)' : 'var(--text-3)',
-                    fontWeight: 600
-                  }}>
-                    {isPlusModel ? (hiRes ? 'LDAC 990k' : 'AAC') : (hiRes ? 'AAC 256k HD' : 'AAC')}
-                  </span>
-                </div>
-                <span className="setting-desc">
-                  {isPlusModel 
-                    ? 'Sony LDAC 990kbps studio transmission' 
-                    : 'High-fidelity audio stream with sinc-quality 10 resampling & zero connection drop'}
-                </span>
-              </div>
-            </div>
-            <button className={`toggle ${hiRes ? 'on' : 'off'}`} onClick={handleToggleHiRes}>
-              <div className="toggle-thumb" />
-            </button>
-          </div>
-
           {/* Gaming Mode */}
           <div className="setting-row">
             <div className="setting-info">
@@ -203,42 +145,6 @@ export const SoundMenu = () => {
           </div>
         </div>
       </motion.div>
-
-      {/* ─── Conflict Dialog ─── */}
-      <AnimatePresence>
-        {conflictDialog && (
-          <motion.div 
-            className="dialog-overlay"
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-          >
-            <motion.div 
-              className="dialog-card"
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="dialog-header">
-                <div className="dialog-icon">
-                  <AlertTriangle size={20} />
-                </div>
-                <span className="dialog-title">Mode Conflict</span>
-              </div>
-              <p className="dialog-body">
-                Hi-Res Audio and Game Mode cannot be active simultaneously. 
-                Enabling {conflictDialog === 'hires' ? 'Hi-Res Audio' : 'Game Mode'} will 
-                disable {conflictDialog === 'hires' ? 'Game Mode' : 'Hi-Res Audio'}.
-              </p>
-              <div className="dialog-actions">
-                <button className="dialog-btn dialog-btn-secondary" onClick={() => setConflictDialog(null)}>Cancel</button>
-                <button className="dialog-btn dialog-btn-primary" onClick={confirmConflict}>Proceed</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
 };
