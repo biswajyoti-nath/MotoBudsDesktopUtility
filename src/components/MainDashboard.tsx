@@ -5,7 +5,7 @@ import budsInCase from '../assets/buds_in_case.png';
 
 export const MainDashboard = () => {
   const { 
-    name, battery, ancMode, setAncMode, 
+    name, battery, ancMode, ancSubMode, setAncMode, 
     physicallyInEarL, physicallyInEarR, 
     currentView, setCurrentView,
     hiRes, gameMode, volBoost, reconnectStatus, eqPreset
@@ -154,7 +154,7 @@ export const MainDashboard = () => {
             
             <button 
               className={`anc-pill-btn ${ancMode === 2 ? 'active' : ''}`} 
-              onClick={() => setAncMode(2, 0)}
+              onClick={() => setAncMode(2, ancSubMode === 4 ? 4 : 0)}
               onMouseEnter={() => setHoveredMode(2)}
             >
               <Sun size={20} />
@@ -162,7 +162,7 @@ export const MainDashboard = () => {
             
             <button 
               className={`anc-pill-btn ${ancMode === 1 ? 'active' : ''}`} 
-              onClick={() => setAncMode(1, 1)}
+              onClick={() => setAncMode(1, ancSubMode || 3)}
               onMouseEnter={() => setHoveredMode(1)}
             >
               <Target size={20} />
@@ -174,10 +174,70 @@ export const MainDashboard = () => {
               hoveredMode === 0 ? 'Off' : hoveredMode === 2 ? 'Transparency' : 'Noise Cancellation'
             ) : (
               (!physicallyInEarL || !physicallyInEarR) ? 'Make sure both earbuds are inserted' : (
-                ancMode === 0 ? 'Off' : ancMode === 2 ? 'Transparency' : 'Noise Cancellation'
+                ancMode === 0 ? 'Off' : ancMode === 2 ? (ancSubMode === 4 ? 'Transparency • Vocal Focus' : 'Transparency • Natural') : (
+                  ancSubMode === 1 ? 'Noise Cancellation • Mild' : ancSubMode === 2 ? 'Noise Cancellation • Balanced' : 'Noise Cancellation • Max 48dB'
+                )
               )
             )}
           </div>
+
+          {/* Sub-mode refinement chips */}
+          {ancMode === 1 && physicallyInEarL && physicallyInEarR && (
+            <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+              {[
+                { label: 'Mild', sub: 1 },
+                { label: 'Balanced', sub: 2 },
+                { label: 'Max 48dB', sub: 3 }
+              ].map(({ label, sub }) => (
+                <button
+                  key={sub}
+                  onClick={() => setAncMode(1, sub)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: (ancSubMode === sub || (sub === 3 && ancSubMode !== 1 && ancSubMode !== 2)) ? 'var(--accent)' : 'rgba(255,255,255,0.08)',
+                    backgroundColor: (ancSubMode === sub || (sub === 3 && ancSubMode !== 1 && ancSubMode !== 2)) ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.03)',
+                    color: (ancSubMode === sub || (sub === 3 && ancSubMode !== 1 && ancSubMode !== 2)) ? 'var(--accent)' : 'var(--text-3)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {ancMode === 2 && physicallyInEarL && physicallyInEarR && (
+            <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+              {[
+                { label: 'Natural Ambient', sub: 0 },
+                { label: 'Vocal Focus', sub: 4 }
+              ].map(({ label, sub }) => (
+                <button
+                  key={sub}
+                  onClick={() => setAncMode(2, sub)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: (ancSubMode === sub || (sub === 0 && ancSubMode !== 4)) ? 'var(--accent)' : 'rgba(255,255,255,0.08)',
+                    backgroundColor: (ancSubMode === sub || (sub === 0 && ancSubMode !== 4)) ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.03)',
+                    color: (ancSubMode === sub || (sub === 0 && ancSubMode !== 4)) ? 'var(--accent)' : 'var(--text-3)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

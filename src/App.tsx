@@ -153,7 +153,7 @@ function App() {
     }
 
     (window as any).sendOpcodeToDevice = async (opcode: number, payload: number[]) => {
-       if (opcode === 513) await window.api.motoCommand({ op: 'anc', mode: payload[0] });
+       if (opcode === 513) await window.api.motoCommand({ op: 'anc', mode: payload[0], sub_mode: payload[1] });
        else if (opcode === 783) await window.api.motoCommand({ op: 'game', enabled: payload[0] });
        else if (opcode === 1027) await window.api.motoCommand({ op: 'inear', enabled: payload[0] });
        else if (opcode === 788) await window.api.motoCommand({ op: 'volboost', enabled: payload[0] });

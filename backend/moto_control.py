@@ -350,6 +350,7 @@ def main():
     parser.add_argument("--battery", action="store_true", help="Read battery levels")
     parser.add_argument("--info", action="store_true", help="Read hardware info")
     parser.add_argument("--anc", type=int, choices=[0, 1, 2], help="Set ANC Mode (0=Off, 1=ANC, 2=Transparency)")
+    parser.add_argument("--sub-mode", type=int, default=None, help="ANC Sub-Mode (ANC: 1=Mild, 2=Moderate, 3=Max; Transparency: 0=Natural, 4=Vocal Focus)")
     parser.add_argument("--game", type=int, choices=[0, 1], help="Set Game Mode")
     parser.add_argument("--inear", type=int, choices=[0, 1], help="Set In-Ear Detection")
     parser.add_argument("--volboost", type=int, choices=[0, 1], help="Set Volume Boost")
@@ -425,8 +426,11 @@ def main():
                         cmd = json.loads(line)
                         op = cmd.get("op")
                         if op == "anc":
-                            sub_mode = 1 if cmd.get("mode") == 1 else 0
-                            controller.toggle_anc(cmd.get("mode"), sub_mode)
+                            mode = cmd.get("mode", 0)
+                            sub_mode = cmd.get("sub_mode")
+                            if sub_mode is None:
+                                sub_mode = 3 if mode == 1 else (4 if mode == 2 else 0)
+                            controller.toggle_anc(mode, sub_mode)
                         elif op == "game":
                             controller.toggle_game_mode(cmd.get("enabled"))
                         elif op == "inear":
@@ -522,7 +526,7 @@ def main():
             res = controller.get_hardware_info()
             results["data"]["hardware_raw"] = res
         if args.anc is not None:
-            sub_mode = 1 if args.anc == 1 else 0
+            sub_mode = args.sub_mode if args.sub_mode is not None else (3 if args.anc == 1 else 0)
             res = controller.toggle_anc(args.anc, sub_mode)
             results["data"]["anc_response"] = res
         if args.game is not None:

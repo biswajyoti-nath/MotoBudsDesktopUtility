@@ -229,8 +229,10 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   }),
 
   setAncMode: (mode, subMode) => {
+    const resolvedSub = subMode !== undefined ? subMode : (mode === 1 ? 3 : (mode === 2 ? 0 : 0));
+    set({ ancMode: mode, ancSubMode: resolvedSub });
     if ((window as any).sendOpcodeToDevice) {
-      (window as any).sendOpcodeToDevice(513, [mode, subMode]);
+      (window as any).sendOpcodeToDevice(513, [mode, resolvedSub]);
     }
   },
 
