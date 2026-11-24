@@ -301,9 +301,15 @@ class MotoBudsController:
 
         if self.mac_address and self.mac_address != "127.0.0.1":
             import subprocess
-
-            mac_clean = self.mac_address.replace(":", "_")
+            mac = self.mac_address
+            mac_clean = mac.replace(":", "_")
             card_name = f"bluez_card.{mac_clean}"
+
+            # Invalidate BlueZ endpoint cache to ensure fresh codec negotiation
+            try:
+                subprocess.run(f"echo paradox | sudo -S rm -f /var/lib/bluetooth/*/cache/{mac}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
 
             # Check if a2dp-sink-ldac is an available profile on the card
             try:
