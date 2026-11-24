@@ -18,8 +18,21 @@ let trayData = { battery: { left: null, right: null, case: null, inCaseL: false,
 let pythonDaemon: any = null;
 
 
-app.commandLine.appendSwitch('enable-web-bluetooth', 'true');
-app.commandLine.appendSwitch('enable-experimental-web-platform-features', 'true');
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  app.commandLine.appendSwitch('enable-web-bluetooth', 'true');
+  app.commandLine.appendSwitch('enable-experimental-web-platform-features', 'true');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -124,14 +137,6 @@ app.whenReady().then(() => {
   }
 
 
-  if (process.platform === 'linux') {
-     try {
-        spawn('bluetoothctl', ['trust', '54:84:50:92:78:AE'], { stdio: 'ignore' });
-     } catch (e) {
-        console.error("Failed to trust device", e);
-     }
-  }
-
   ipcMain.handle('start-daemon', async (event) => {
     return new Promise((resolve) => {
       if (pythonDaemon) {
@@ -209,18 +214,26 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-});
+  app.on('before-quit', () => {
+    isQuitting = true;
+    if (pythonDaemon) {
+      try {
+        pythonDaemon.kill('SIGTERM');
+      } catch (e) {}
+      pythonDaemon = null;
+    }
+  });
 
-app.on('window-all-closed', () => {
-  // Kill daemon if running
-  try {
-     const { execSync } = require('child_process');
-     execSync('pkill -f moto_control.py.*--daemon');
-  } catch(e) {}
-  
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  app.on('window-all-closed', () => {
+    if (pythonDaemon) {
+      try {
+        pythonDaemon.kill('SIGTERM');
+      } catch (e) {}
+      pythonDaemon = null;
+    }
+    
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+}

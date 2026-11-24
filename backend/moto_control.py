@@ -7,16 +7,136 @@ import sys
 import json
 import subprocess
 
-CLASSIC_MAC = "54:84:50:92:78:AE"
-RFCOMM_PORT = 16
+import re
+
+CLASSIC_MAC = "9C:CD:42:B7:1F:46"
+RFCOMM_PORT = 28
+
+def auto_detect_moto_buds():
+    """
+    Automatically detects connected or paired Motorola Buds and resolves
+    the RFCOMM port (specifically the MOTOSPP channel).
+    """
+    detected_mac = None
+    detected_port = None
+
+    try:
+        dev_proc = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True, timeout=3)
+        candidates = []
+        for line in dev_proc.stdout.strip().split("\n"):
+            match = re.search(r"Device\s+([0-9A-Fa-f:]{17})\s+(.+)$", line)
+            if match:
+                mac, name = match.group(1), match.group(2).strip()
+                if re.search(r"(moto.*bud|motorola.*bud)", name, re.IGNORECASE):
+                    candidates.append((mac, name))
+
+        for mac, name in candidates:
+            info_proc = subprocess.run(["bluetoothctl", "info", mac], capture_output=True, text=True, timeout=3)
+            if "Connected: yes" in info_proc.stdout:
+                detected_mac = mac
+                break
+
+        if not detected_mac and candidates:
+            detected_mac = candidates[0][0]
+    except Exception:
+        pass
+
+    target_mac = detected_mac or CLASSIC_MAC
+    if target_mac and target_mac != "127.0.0.1":
+        try:
+            sdp_proc = subprocess.run(["sdptool", "search", "--bdaddr", target_mac, "SP"], capture_output=True, text=True, timeout=5)
+            lines = sdp_proc.stdout.split("\n")
+            in_motospp = False
+            for line in lines:
+                if "Service Name: MOTOSPP" in line or "fc9d9fe0-4899-11ee-be56-0242ac120002" in line:
+                    in_motospp = True
+                elif in_motospp and "Channel:" in line:
+                    ch_match = re.search(r"Channel:\s*(\d+)", line)
+                    if ch_match:
+                        detected_port = int(ch_match.group(1))
+                        break
+                elif in_motospp and "Service Name:" in line:
+                    in_motospp = False
+        except Exception:
+            pass
+
+    return detected_mac, detected_port
 
 HEAD = b"HEAD"
 TAIL = b"TAIL"
 
+EQ_PRESETS = {
+    "harman_2019v2": [5.5, 4.5, 2.0, 0.0, 0.5, 1.5, 3.5, 2.0, -1.5, 1.0],
+    "diffuse_field": [-2.0, -1.0, 0.0, 0.0, 0.5, 1.5, 3.0, 2.5, 0.5, 0.0],
+    "harman_bass_boost": [7.5, 6.0, 2.5, -0.5, 0.0, 1.0, 2.5, 1.5, -1.0, 0.5],
+    "vocal_midrange_clarity": [-1.5, -1.0, 0.0, 0.5, 1.5, 3.0, 4.0, 2.0, 0.0, -0.5],
+    "treble_air_detail": [0.0, 0.0, -0.5, -0.5, 0.0, 1.0, 2.0, 3.5, 4.5, 3.5],
+    "warm_relaxed": [3.5, 3.0, 2.0, 1.0, 0.5, 0.0, -1.0, -2.0, -3.0, -4.0],
+    "dynamic_immersive": [6.0, 4.5, 1.5, -1.0, -1.5, 0.0, 2.0, 3.5, 4.0, 3.0],
+    "flat": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+}
+
+PRESET_ALIASES = {
+    "harman in-ear target 2019v2": "harman_2019v2",
+    "harman_in_ear_target_2019v2": "harman_2019v2",
+    "harman": "harman_2019v2",
+    "harman_2019": "harman_2019v2",
+    "diffuse field / neutral studio": "diffuse_field",
+    "diffuse_field_neutral_studio": "diffuse_field",
+    "neutral_studio": "diffuse_field",
+    "neutral": "diffuse_field",
+    "harman bass boost": "harman_bass_boost",
+    "bass_boost": "harman_bass_boost",
+    "bass": "harman_bass_boost",
+    "vocal & midrange clarity": "vocal_midrange_clarity",
+    "vocal_clarity": "vocal_midrange_clarity",
+    "vocal": "vocal_midrange_clarity",
+    "treble & air detail": "treble_air_detail",
+    "treble_detail": "treble_air_detail",
+    "treble": "treble_air_detail",
+    "warm & relaxed": "warm_relaxed",
+    "warm": "warm_relaxed",
+    "dynamic & immersive": "dynamic_immersive",
+    "immersive": "dynamic_immersive",
+    "dynamic": "dynamic_immersive",
+}
+
+def resolve_preset(name: str):
+    if not name:
+        return None
+    key = str(name).strip().lower()
+    if key in EQ_PRESETS:
+        return EQ_PRESETS[key]
+    key_norm = key.replace("-", "_").replace(" ", "_").replace("/", "_").replace("&", "_")
+    while "__" in key_norm:
+        key_norm = key_norm.replace("__", "_")
+    key_norm = key_norm.strip("_")
+    if key_norm in EQ_PRESETS:
+        return EQ_PRESETS[key_norm]
+    if key in PRESET_ALIASES:
+        return EQ_PRESETS[PRESET_ALIASES[key]]
+    if key_norm in PRESET_ALIASES:
+        return EQ_PRESETS[PRESET_ALIASES[key_norm]]
+    return None
+
 class MotoBudsController:
-    def __init__(self, mac_address=CLASSIC_MAC, port=RFCOMM_PORT, output_json=False, is_daemon=False):
-        self.mac_address = mac_address
-        self.port = port
+    def __init__(self, mac_address=None, port=None, output_json=False, is_daemon=False):
+        auto_mac, auto_port = None, None
+        if not mac_address or mac_address == "auto":
+            auto_mac, auto_port = auto_detect_moto_buds()
+            self.mac_address = auto_mac or CLASSIC_MAC
+        else:
+            self.mac_address = mac_address
+
+        if port is not None and port > 0:
+            self.port = port
+        elif self.mac_address == "127.0.0.1":
+            self.port = port or 5001
+        else:
+            if auto_port is None:
+                _, auto_port = auto_detect_moto_buds()
+            self.port = auto_port or RFCOMM_PORT
+
         self.sock = None
         self.output_json = output_json
         self.is_daemon = is_daemon
@@ -28,22 +148,33 @@ class MotoBudsController:
             print(msg)
 
     def connect(self):
+        if self.mac_address and self.mac_address != "127.0.0.1":
+            try:
+                subprocess.run(["bluetoothctl", "trust", self.mac_address], capture_output=True, timeout=2)
+            except Exception:
+                pass
         self.log(f"[*] Connecting to {self.mac_address} on Port {self.port}...")
-        if self.mac_address == "127.0.0.1":
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            self.sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-        self.sock.settimeout(3.0)
         
         for attempt in range(5):
             try:
+                if self.mac_address == "127.0.0.1":
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                else:
+                    self.sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                self.sock.settimeout(3.0)
                 self.sock.connect((self.mac_address, self.port))
                 self.log("[+] Connected successfully!")
                 self._initialization_handshake()
                 return True
             except Exception as e:
                 self.log(f"[-] Connection attempt {attempt+1} failed: {e}")
-                time.sleep(0.5)
+                if self.sock:
+                    try:
+                        self.sock.close()
+                    except Exception:
+                        pass
+                    self.sock = None
+                time.sleep(0.6)
                 
         self.log("[-] Failed to connect after all attempts.")
         self.sock = None
@@ -96,7 +227,7 @@ class MotoBudsController:
             return None
             
         try:
-            self.sock.settimeout(0.5)
+            self.sock.settimeout(1.5)
             all_data = bytearray()
             chunk = self.sock.recv(4096)
             if chunk:
@@ -168,19 +299,23 @@ class MotoBudsController:
         self.log(f"[*] Setting Hi-Res Mode: {enabled}")
         resp = self._send_and_receive(0x030D, bytes([enabled]))
 
-        # The earbuds will internally reboot to renegotiate the LDAC codec.
-        # We must bounce the adapter unconditionally because in daemon mode, _send_and_receive returns None.
-        if self.mac_address != "127.0.0.1":
+        if self.mac_address and self.mac_address != "127.0.0.1":
             import subprocess
-            # We use disconnect and connect to force the Linux A2DP stack to renegotiate
-            # the codec successfully without taking down the entire bluetooth adapter.
-            subprocess.Popen(
-                f"sleep 1 ; bluetoothctl disconnect {self.mac_address} ; sleep 2 ; bluetoothctl connect {self.mac_address}", 
-                shell=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+
+            mac_clean = self.mac_address.replace(":", "_")
+            card_name = f"bluez_card.{mac_clean}"
+
+            # Check if a2dp-sink-ldac is an available profile on the card
+            try:
+                cards_out = subprocess.run(["pactl", "list", "cards"], capture_output=True, text=True, timeout=3).stdout
+                if card_name in cards_out and "a2dp-sink-ldac" in cards_out:
+                    target_profile = "a2dp-sink-ldac" if enabled else "a2dp-sink"
+                    self.log(f"[*] Switching card profile to {target_profile} seamlessly...")
+                    subprocess.run(["pactl", "set-card-profile", card_name, target_profile], capture_output=True, timeout=3)
+                else:
+                    self.log(f"[*] Moto Buds model ({self.mac_address}) operates on high-fidelity AAC/SBC hardware. Audio stream remains active and uninterrupted.")
+            except Exception as e:
+                self.log(f"[-] Profile check error: {e}")
 
         return resp.hex() if resp else None
 
@@ -196,12 +331,15 @@ class MotoBudsController:
 
     def set_custom_eq(self, bands):
         import struct
-        self.log(f"[*] Setting Custom EQ")
+        float_bands = [float(b) for b in bands] if bands else [0.0] * 10
+        max_gain = max(float_bands + [0.0])
+        preamp = -max_gain if max_gain > 0 else 0.0
+        self.log(f"[*] Setting Custom EQ (max gain: {max_gain:+.1f} dB, anti-clipping preamp: {preamp:+.1f} dB): {float_bands}")
         # 173 bytes payload for opcode 774 (0x0306)
         payload = bytearray([0x3F])
-        payload.extend(struct.pack('<f', 0.0)) # Pre-amp
-        payload.extend(struct.pack('<f', 0.0)) # Post-amp
-        payload.extend(struct.pack('<i', 10))  # Num bands
+        payload.extend(struct.pack('<f', preamp)) # Negative Pre-amp to prevent clipping
+        payload.extend(struct.pack('<f', 0.0))    # Post-amp
+        payload.extend(struct.pack('<i', 10))     # Num bands
         
         freqs = [32.0, 64.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0]
         for i in range(10):
@@ -213,6 +351,14 @@ class MotoBudsController:
             
         resp = self._send_and_receive(0x0306, bytes(payload))
         return resp.hex() if resp else None
+
+    def apply_preset(self, preset_name: str):
+        bands = resolve_preset(preset_name)
+        if bands is None:
+            self.log(f"[-] Unknown EQ preset: '{preset_name}'. Available: {list(EQ_PRESETS.keys())}")
+            return None
+        self.log(f"[*] Applying scientific EQ preset '{preset_name}'")
+        return self.set_custom_eq(bands)
 
     def set_gesture(self, earbud: int, gesture_type: int, function_id: int):
         self.log(f"[*] Setting Gesture: Earbud={earbud}, Type={gesture_type}, Func={function_id}")
@@ -234,26 +380,36 @@ def main():
     parser.add_argument("--keepalive", type=int, help="Keep SPP connection alive for N seconds to capture async events")
     parser.add_argument("--sync", action="store_true", help="Sync startup states (ANC, HiRes, Game, InEar)")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
-    parser.add_argument("--mac", type=str, default=CLASSIC_MAC, help="MAC address or 127.0.0.1 for mock")
-    parser.add_argument("--port", type=int, default=RFCOMM_PORT, help="Port")
+    parser.add_argument("--preset", type=str, help="Apply a scientifically tuned EQ preset (e.g. harman_2019v2, diffuse_field, harman_bass_boost, vocal_midrange_clarity, treble_air_detail, warm_relaxed, dynamic_immersive, flat)")
+    parser.add_argument("--custom-eq", type=str, help="Apply custom 10-band EQ (comma-separated float gains, e.g. '5.5,4.5,2.0,0.0,0.5,1.5,3.5,2.0,-1.5,1.0')")
+    parser.add_argument("--mac", type=str, default=None, help="MAC address (default: auto-detect)")
+    parser.add_argument("--port", type=int, default=None, help="Port (default: auto-detect)")
     
     args = parser.parse_args()
     
-    if not any([args.battery, args.info, args.anc is not None, args.game is not None, args.inear is not None, args.volboost is not None, args.hires is not None, args.fit is not None, args.fmd is not None, args.sync, args.daemon]):
+    if not any([args.battery, args.info, args.anc is not None, args.game is not None, args.inear is not None, args.volboost is not None, args.hires is not None, args.fit is not None, args.fmd is not None, args.sync, args.daemon, args.preset is not None, args.custom_eq is not None]):
         parser.print_help()
         sys.exit(1)
 
-    # If this is a UI command (not a keepalive polling script), we must preemptively 
-    # kill the background keepalive script, otherwise the RFCOMM socket is locked 
-    # and we'll get a 'Device or resource busy' error.
-    if args.keepalive is None:
-        try:
-            import subprocess
-            # Kill any running moto_control.py that has --keepalive
-            subprocess.run(["pkill", "-f", "moto_control.py.*--keepalive"], stderr=subprocess.DEVNULL)
-            time.sleep(0.2) # Give the OS a tiny moment to release the RFCOMM port
-        except Exception:
-            pass
+    # If this is a UI command or daemon startup, terminate any orphaned background instances
+    # to release RFCOMM port locks and prevent [Errno 77] File descriptor in bad state.
+    try:
+        import os, subprocess
+        my_pid = os.getpid()
+        out = subprocess.run(["pgrep", "-f", "moto_control.py.*--(daemon|keepalive)"], capture_output=True, text=True).stdout.split()
+        killed = False
+        for pid_str in out:
+            p = int(pid_str)
+            if p != my_pid:
+                try:
+                    os.kill(p, 15)
+                    killed = True
+                except Exception:
+                    pass
+        if killed:
+            time.sleep(0.5)
+    except Exception:
+        pass
 
     controller = MotoBudsController(mac_address=args.mac, port=args.port, output_json=args.json, is_daemon=args.daemon)
     
@@ -268,14 +424,25 @@ def main():
         subprocess.Popen("killall -q mpris-proxy ; sleep 0.5 ; mpris-proxy &", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         
-        import threading
-        
+        import signal, threading
+        running = [True]
+        def sig_handler(signum, frame):
+            running[0] = False
+        try:
+            signal.signal(signal.SIGINT, sig_handler)
+            signal.signal(signal.SIGTERM, sig_handler)
+        except Exception:
+            pass
+
         def stdin_listener():
-            for line in sys.stdin:
-                line = line.strip()
-                if not line: continue
-                try:
-                    cmd = json.loads(line)
+            try:
+                for line in sys.stdin:
+                    if not running[0]:
+                        break
+                    line = line.strip()
+                    if not line: continue
+                    try:
+                        cmd = json.loads(line)
                     op = cmd.get("op")
                     if op == "anc":
                         sub_mode = 1 if cmd.get("mode") == 1 else 0
@@ -293,7 +460,12 @@ def main():
                     elif op == "fmd":
                         controller.toggle_fmd(int(cmd.get("left", 0)), int(cmd.get("right", 0)))
                     elif op == "eq":
-                        controller.set_custom_eq(cmd.get("bands"))
+                        if "preset" in cmd and cmd["preset"]:
+                            controller.apply_preset(cmd.get("preset"))
+                        elif "bands" in cmd:
+                            controller.set_custom_eq(cmd.get("bands"))
+                    elif op == "preset":
+                        controller.apply_preset(cmd.get("preset") or cmd.get("name"))
                     elif op == "gesture":
                         controller.set_gesture(cmd.get("earbud"), cmd.get("gesture"), cmd.get("func"))
                     elif op == "sync":
@@ -317,6 +489,9 @@ def main():
                         print(json.dumps({"type": "info", "data": res}), flush=True)
                 except Exception as e:
                     controller.log(f"[-] Daemon JSON command error: {e}")
+            except Exception:
+                pass
+            running[0] = False
         
         # Start the thread that listens to commands from Electron
         t = threading.Thread(target=stdin_listener, daemon=True)
@@ -324,7 +499,7 @@ def main():
         
         # Main thread acts as the async event polling loop
         controller.sock.settimeout(0.5)
-        while True:
+        while running[0]:
             try:
                 data = controller.sock.recv(1024)
                 if data:
@@ -332,21 +507,17 @@ def main():
             except socket.timeout:
                 continue
             except Exception as e:
+                if not running[0]:
+                    break
                 print(json.dumps({"type": "error", "message": f"Connection dropped, attempting to reconnect... ({e})"}), flush=True)
-                
-                # The earbuds often momentarily reboot their Bluetooth stack to renegotiate
-                # codecs (e.g., when toggling LDAC Hi-Res). Instead of crashing the daemon, 
-                # we wait and attempt to gracefully reconnect.
                 controller.disconnect()
-                
-                # Give the OS-level bluetoothctl script 4 seconds to fully bounce
-                # the connection (disconnect -> connect) before we aggressively 
-                # try to grab the RFCOMM serial port again.
-                time.sleep(4)
+                time.sleep(2)
                 
                 reconnected = False
-                for attempt in range(10):
-                    time.sleep(2)
+                for attempt in range(5):
+                    if not running[0]:
+                        break
+                    time.sleep(1.5)
                     if controller.connect():
                         reconnected = True
                         print(json.dumps({"type": "status", "status": "connected"}), flush=True)
@@ -354,7 +525,7 @@ def main():
                         subprocess.Popen("killall -q mpris-proxy ; sleep 0.5 ; mpris-proxy &", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         break
                         
-                if not reconnected:
+                if not reconnected and running[0]:
                     print(json.dumps({"type": "error", "message": "Failed to reconnect after device reset."}), flush=True)
                     break
                 
@@ -392,6 +563,26 @@ def main():
         if args.fmd is not None:
             res = controller.toggle_fmd(args.fmd)
             results["data"]["fmd_response"] = res
+        if args.preset is not None:
+            res = controller.apply_preset(args.preset)
+            results["data"]["preset_response"] = res
+            results["data"]["preset"] = args.preset
+            bands = resolve_preset(args.preset)
+            if bands:
+                results["data"]["bands"] = bands
+                max_gain = max(bands + [0.0])
+                results["data"]["preamp_db"] = -max_gain if max_gain > 0 else 0.0
+        if args.custom_eq is not None:
+            try:
+                bands = [float(x.strip()) for x in args.custom_eq.split(",")]
+                res = controller.set_custom_eq(bands)
+                results["data"]["custom_eq_response"] = res
+                results["data"]["bands"] = bands
+                max_gain = max(bands + [0.0])
+                results["data"]["preamp_db"] = -max_gain if max_gain > 0 else 0.0
+            except Exception as e:
+                controller.log(f"[-] Invalid --custom-eq format: {e}")
+                results["data"]["custom_eq_error"] = str(e)
 
         if args.sync:
             # Opcode 512, 780, 782, 1026

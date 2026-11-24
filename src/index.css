@@ -910,32 +910,14 @@ img {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  height: 260px;
   position: relative;
+  gap: var(--space-sm);
 }
 
 /* Zero-line reference */
-.eq-sliders::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--border);
-  pointer-events: none;
-  z-index: 0;
-}
-
+.eq-sliders::before,
 .eq-sliders::after {
-  content: '0 dB';
-  position: absolute;
-  right: -8px;
-  top: 50%;
-  transform: translateY(-50%) translateX(100%);
-  font-size: 10px;
-  color: var(--text-3);
-  pointer-events: none;
+  display: none;
 }
 
 .eq-band {

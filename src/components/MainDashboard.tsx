@@ -1,6 +1,6 @@
 import { useDeviceStore } from '../store/useDeviceStore';
 import { useState } from 'react';
-import { Zap, Settings, Activity, Ear, MousePointerClick, CheckCircle2, EarOff, Sun, Target, X, Loader2 } from 'lucide-react';
+import { Zap, Settings, Activity, Ear, MousePointerClick, CheckCircle2, EarOff, Sun, Target, X, Loader2, Sliders } from 'lucide-react';
 import budsInCase from '../assets/buds_in_case.png';
 
 export const MainDashboard = () => {
@@ -8,7 +8,7 @@ export const MainDashboard = () => {
     name, battery, ancMode, setAncMode, 
     physicallyInEarL, physicallyInEarR, 
     currentView, setCurrentView,
-    hiRes, gameMode, volBoost, reconnectStatus
+    hiRes, gameMode, volBoost, reconnectStatus, eqPreset
   } = useDeviceStore();
 
   const [hoveredMode, setHoveredMode] = useState<number | null>(null);
@@ -182,11 +182,17 @@ export const MainDashboard = () => {
       </div>
 
       {/* ─── Active Feature Badges ─── */}
-      {(hiRes || gameMode || volBoost) && (
+      {(hiRes || gameMode || volBoost || (eqPreset && eqPreset !== 'Flat')) && (
         <div className="status-badges">
-          {hiRes && <div className="status-badge"><div className="badge-dot" />Hi-Res</div>}
+          {hiRes && <div className="status-badge"><div className="badge-dot" />Hi-Res Audio</div>}
           {gameMode && <div className="status-badge"><div className="badge-dot" />Game Mode</div>}
           {volBoost && <div className="status-badge"><div className="badge-dot" />Vol Boost</div>}
+          {eqPreset && eqPreset !== 'Flat' && (
+            <div className="status-badge" style={{ borderColor: 'rgba(14, 165, 233, 0.3)' }}>
+              <div className="badge-dot" style={{ backgroundColor: 'var(--accent)' }} />
+              {eqPreset}
+            </div>
+          )}
         </div>
       )}
 
@@ -200,6 +206,13 @@ export const MainDashboard = () => {
           >
             <Activity size={18} className="nav-item-icon" />
             Sound
+          </button>
+          <button 
+            className={`nav-item ${currentView === 'equalizer' ? 'active' : ''}`} 
+            onClick={() => setCurrentView('equalizer')}
+          >
+            <Sliders size={18} className="nav-item-icon" />
+            Equalizer
           </button>
           <button 
             className={`nav-item ${currentView === 'gestures' ? 'active' : ''}`} 

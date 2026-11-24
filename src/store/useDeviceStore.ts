@@ -241,7 +241,12 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     }
   },
 
-  setEqPreset: (preset) => set({ eqPreset: preset }),
+  setEqPreset: (preset) => {
+    set({ eqPreset: preset });
+    if ((window as any).api && (window as any).api.motoCommand) {
+      (window as any).api.motoCommand({ op: 'preset', preset });
+    }
+  },
 
   setGameMode: (enabled) => {
     if ((window as any).sendOpcodeToDevice) {
